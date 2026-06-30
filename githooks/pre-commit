@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+#
+# pre-commit — secret & org-context guard for the claude-config repo.
+#
+# Scans the *staged additions* of each commit (not the whole tree, not unchanged
+# lines) for two classes of leak and aborts the commit if it finds either:
+#
+#   1. Credential-shaped content — private keys, cloud/API tokens, hardcoded
+#      secret assignments. Always on; needs no configuration.
+#   2. Org-specific literals you never want published — your NAS host, GCP
+#      project IDs, service-account emails, corporate email domain, etc. These
+#      are read from githooks/blocklist.local (git-ignored, never committed), so
+#      the guard knows the sensitive strings WITHOUT the repo itself storing them.
+#
+# Why added-lines-only: a guard that re-flagged pre-existing lines would block
+# every commit that merely touches an already-tracked file. We parse `git diff
+# --cached -U0` and only inspect lines the commit ADDS.
+#
+# Performance: the staged additions are flattened ONCE into "file:line:content"
+# rows, then matched with a few bulk grep passes — not a subshell per line — so a
+# large commit (hundreds of files) still scans in well under a second.
+#
+# Bypass (use sparingly, e.g. a vetted false positive):
+#     SKIP_SECRET_SCAN=1 git commit ...        # or:  git commit --no-verify
+#
+# Install once per clone (setup.sh does this automatically):
+#     git config core.hooksPath githooks
+#
+# Deliberately bash-3.2 safe (macOS system bash): no arrays, no `local var=$(...)`.
+#
+set -uo pipefail
+
+[ "${SKIP_SECRET_SCAN:-0}" = "1" ] && exit 0
+
+TOP="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+BLOCKLIST="$TOP/githooks/blocklist.local"
+
+# Shared ALLOW_RE / CRED_RE — single source of truth (also used by scan-tree.sh).
+HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=secret-patterns.sh
+. "$HOOKDIR/secret-patterns.sh"
+
+ROWS="$(mktemp)"; trap 'rm -f "$ROWS" "$BLPAT" 2>/dev/null' EXIT
+BLPAT=""
+
+# Paths excluded from scanning: the guard's OWN test corpus deliberately contains
+# fake credential fixtures, so scanning it would always self-trip. Keep this list
+# tight — anything excluded here is a blind spot.
+EXCLUDE_RE='^tests/githooks/'
+
+# 1) Flatten staged additions into file:line:content rows (one bash pass).
+file=""; lineno=0
+while IFS= read -r l; do
+  case "$l" in
+    '+++ b/'*)
+      file="${l#+++ b/}"
+      printf '%s' "$file" | grep -qE -e "$EXCLUDE_RE" && file=""
+      ;;
+    '+++ '*)   file="" ;;                 # /dev/null etc.
+    '@@ '*)
+      tmp="${l#*+}"; tmp="${tmp%% *}"; lineno="${tmp%%,*}"
+      case "$lineno" in ''|*[!0-9]*) lineno=0 ;; esac
+      ;;
+    '+'*)
+      [ -n "$file" ] && printf '%s:%s:%s\n' "$file" "$lineno" "${l#+}"
+      lineno=$((lineno + 1))
+      ;;
+  esac
+done < <(git diff --cached --no-color -U0 --diff-filter=ACM) > "$ROWS"
+
+found=0
+
+# 2) Org blocklist — matched unconditionally (placeholder allowlist does NOT excuse).
+if [ -f "$BLOCKLIST" ]; then
+  BLPAT="$(mktemp)"
+  grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$BLOCKLIST" > "$BLPAT" 2>/dev/null || true
+  if [ -s "$BLPAT" ]; then
+    bl="$(grep -iE -f "$BLPAT" "$ROWS" 2>/dev/null || true)"
+    if [ -n "$bl" ]; then
+      printf '\033[31m✖ pre-commit: staged change matches githooks/blocklist.local (org-sensitive literal)\033[0m\n' >&2
+      printf '%s\n' "$bl" | cut -c1-160 | sed 's/^/  /' >&2
+      found=1
+    fi
+  fi
+fi
+
+# 3) Credentials — drop allowlisted (placeholder) rows first, then match signatures.
+cr="$(grep -viE -e "$ALLOW_RE" "$ROWS" 2>/dev/null | grep -iE -e "$CRED_RE" 2>/dev/null || true)"
+if [ -n "$cr" ]; then
+  printf '\033[31m✖ pre-commit: staged change looks like a credential / secret\033[0m\n' >&2
+  printf '%s\n' "$cr" | cut -c1-160 | sed 's/^/  /' >&2
+  found=1
+fi
+
+if [ "$found" = 1 ]; then
+  printf '\nRemove it, or — if this is a verified false positive — re-run with\n' >&2
+  printf '  SKIP_SECRET_SCAN=1 git commit ...   (or git commit --no-verify)\n' >&2
+  printf 'To teach the guard a new org literal, add a regex to githooks/blocklist.local\n' >&2
+  exit 1
+fi
+exit 0

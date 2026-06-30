@@ -1,0 +1,22 @@
+{
+  "skill_name": "holistic-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I've been iterating on the agent setup in ~/.claude/agents/ and the project-level agents under ~/Development/GitHubProjects/{example-project-a,example-project-b,example-project-c,example-tools,example-ops}/.claude/agents/. Can you review the whole agent ecosystem fundamentally and tell me about any structural issues, overlaps, or gaps? Don't just lint the frontmatter — I want a step-back assessment of how the pieces fit together, AND any creative ideas for how this could be fundamentally better.",
+      "expected_output": "A topography paragraph first, then categorized findings (🔴 fix / 🟡 design / 🟢 healthy / 🔵 open) including at least: the deploy-verify cluster overlap (command + project verifier + global pipeline step 4 all redefining same docker calls), the generalist-vs-specialist hierarchies (code-reviewer + unity-conventions-reviewer; knowledge-checker + fact-checker) marked as 🟢 healthy, the 15 byte-identical reviewer files across project01/02/03 (intentional independence). PLUS a 💡 Creative possibilities section with at least 2 concrete reframes (e.g. parametric verifier replacing N specialized verifiers; declarative per-project rule config replacing duplicated reviewer dirs) — each with reframe + impact + honest cost. Top-3 actions list mixing fixes and reframes by leverage.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Can you take a comprehensive look at ~/Development/GitHubProjects/example-service/qa/ — the test guide automation tool I just built? I'm worried I'm too close to it. Is there anything structurally off, missing, or over-engineered that I'd only see from a distance? And if you were redesigning this from scratch knowing what we know now, would the shape be different?",
+      "expected_output": "Topography (Python project, CLI + lib + tests, mirrors GitHub-Notion-Sync layout). Findings should consider: missing layers (no integration test against real Notion, no GitHub Actions hook for tag-push automation), single-project hardcoding, schema-discovery design (likely 🟢 healthy). 💡 Creative possibilities should include at least one concrete reframe — e.g. 'instead of a per-project CLI, the tool could be a generic git-tag-to-Notion-template engine usable for any release-doc workflow', with explicit cost. Should NOT recommend mass refactoring on a small project — and should be willing to say 'no fundamental reframe needed' if honestly that's the answer.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "step back and audit my whole Claude Code setup — settings.json, hooks, agents, skills, commands, MCP servers. is there anything that overlaps with itself, contradicts itself, or is just dead weight at this point? also throw in any creative ideas — if you were designing this from scratch what would you do differently?",
+      "expected_output": "Wide-scope topography (settings hooks count, agent count, skill count, command count, MCP server count). Findings should include: any hooks that no longer fire, any commands that duplicate skills, any unused MCP servers, redundant settings.json permissions. Strong 🟢 healthy section. 💡 Creative possibilities section with at least 2 reframes — e.g. 'replace the 3-tier project layout with a single CLAUDE.md template engine that generates per-project setup', or 'fold the 5 reviewer agents into one parametric reviewer reading project-level rule files'. Top-3 list mixing audit fixes and reframe-driven changes by leverage."
+    }
+  ]
+}

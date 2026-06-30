@@ -1,0 +1,70 @@
+{
+  "cwd": "/home/you/projects/example-service",
+  "session_id": "abc123-fixture",
+  "session_name": "example-session",
+  "transcript_path": "/tmp/transcript.jsonl",
+  "model": {
+    "id": "claude-opus-4-8",
+    "display_name": "Opus 4.8 (1M context)"
+  },
+  "workspace": {
+    "current_dir": "/home/you/projects/example-service",
+    "project_dir": "/home/you/projects/example-service",
+    "added_dirs": [],
+    "git_worktree": "feature-xyz",
+    "repo": {
+      "host": "github.com",
+      "owner": "example-org",
+      "name": "example-service"
+    }
+  },
+  "version": "2.1.172",
+  "output_style": {
+    "name": "default"
+  },
+  "cost": {
+    "total_cost_usd": 0.1234,
+    "total_duration_ms": 45000,
+    "total_api_duration_ms": 2300,
+    "total_lines_added": 156,
+    "total_lines_removed": 23
+  },
+  "context_window": {
+    "total_input_tokens": 320000,
+    "total_output_tokens": 1200,
+    "context_window_size": 1000000,
+    "used_percentage": 32,
+    "remaining_percentage": 68,
+    "current_usage": {
+      "input_tokens": 8500,
+      "output_tokens": 1200,
+      "cache_creation_input_tokens": 5000,
+      "cache_read_input_tokens": 305000
+    }
+  },
+  "exceeds_200k_tokens": true,
+  "effort": {
+    "level": "high"
+  },
+  "thinking": {
+    "enabled": true
+  },
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 47,
+      "resets_at": 1781157600
+    },
+    "seven_day": {
+      "used_percentage": 54,
+      "resets_at": 1781640000
+    }
+  },
+  "vim": {
+    "mode": "INSERT"
+  },
+  "pr": {
+    "number": 42,
+    "url": "https://github.com/example-org/example-service/pull/42",
+    "review_state": "changes_requested"
+  }
+}

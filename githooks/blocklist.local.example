@@ -1,0 +1,22 @@
+# githooks/blocklist.local.example — template for the pre-commit org-literal guard.
+#
+# Copy to githooks/blocklist.local (which is git-ignored) and fill in the literal
+# strings or regexes you never want to appear in a commit. The pre-commit hook
+# reads blocklist.local — NOT this example — so your real sensitive strings are
+# never themselves committed.
+#
+#   cp githooks/blocklist.local.example githooks/blocklist.local
+#   $EDITOR githooks/blocklist.local
+#
+# Rules:
+#   - One extended-regex (grep -E) pattern per line. Matching is case-insensitive.
+#   - Lines starting with '#' and blank lines are ignored.
+#   - Escape regex metacharacters ('.', '-' inside [], etc.) where you mean literals.
+#
+# Example patterns (replace with your own; these are illustrative, not real):
+#
+#   myhost\.example-ddns\.org          # NAS / remote host you don't want public
+#   [0-9]{4,}@example\.org             # corporate email pattern
+#   my-gcp-project-[0-9]+              # GCP / cloud project ids
+#   [a-z-]+@[a-z-]+\.iam\.gserviceaccount\.com   # any GCP service-account email
+#   internal-tool-name                # internal repo / monorepo / tooling names
