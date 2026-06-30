@@ -17,6 +17,69 @@ machine-verified export (see *How this repo is built*).
 | **youtube-download skill** | A yt-dlp wrapper skill for saving video/audio to disk. |
 | **Tests** (`tests/`) | Hermetic suites for every script — the guard, the memory engine, the statusline. |
 
+## Architecture
+
+This repo is the **public half of a two-repo model**. You keep working in a private
+`~/.claude` config (full org context); a curated, machine-verified subset is exported
+here. Nothing is published until it clears three gates.
+
+```
+   ┌─────────────────────────────┐
+   │  private ~/.claude config     │   ← you always edit here
+   │  (full org context)           │
+   └──────────────┬──────────────┘
+                  │  publish.sh
+                  ▼
+   ① machine scan ───────────────────────────────────────────┐
+      credential regex + a git-ignored denylist of org tokens │ fails → blocked
+      (whole-tree scan; nothing ships on any hit)             │
+                  │ clean                                      │
+                  ▼                                            │
+   ② human diff   the exact diff that would go public is       │
+      review      shown — the last net for a NOVEL leak the    │
+                  denylist hasn't learned yet                  │
+                  │ approved                                   │
+                  ▼                                            │
+   ③ deploy ──────────────────────────────────────────────────┘
+                  │
+                  ▼
+   ┌─────────────────────────────┐
+   │  this public repo             │   ← curated, org-free subset
+   └─────────────────────────────┘
+```
+
+The scan is **necessary but not sufficient**: a denylist only blocks strings it
+already knows, so a human reads the diff (gate ②) before anything is pushed.
+
+### Layout
+
+```
+.
+├── githooks/              # ① the secret guard + the whole-tree publish scanner
+│   ├── pre-commit         #    blocks credential/denylisted content at commit time
+│   ├── scan-tree.sh       #    whole-tree scan used as the publish gate
+│   ├── secret-patterns.sh #    shared credential regexes (DRY source)
+│   └── blocklist.local.example
+├── hooks/                 # PR-gate: consult existing PR comments before reviewing
+├── skills/               # opt-in via `visibility: public` frontmatter in SKILL.md
+│   ├── holistic-review/        # zoom-out audit + creative reframes
+│   ├── pr-comment-aware-review/ # dedup new findings against prior PR comments
+│   ├── review-suppressions/    # audit the dedup decisions
+│   └── youtube-download/       # yt-dlp wrapper
+├── link-claude-memory.sh  # cross-Mac memory sync engine (keyed by git remote)
+├── build-repo-map.sh      #    repo → shared memory-bucket mapping
+├── MEMORY-SYNC.md         #    how the memory model works
+├── statusline-command.sh  # compact, information-dense status line
+├── tests/                 # hermetic suite per script (sandboxes its own inputs)
+│   ├── githooks/  ├── hooks/  ├── memory-sync/  └── statusline/
+├── SECURITY.md            # the full four-layer defense model
+├── README.md  └── LICENSE
+```
+
+Skills are **opt-in**: the exporter reads a `visibility: public` line from each
+skill's `SKILL.md` frontmatter and includes only those — so a private skill stays
+private just by *not* carrying that line.
+
 ## Install
 
 Clone, then turn on the secret guard (one command, scoped to this repo):
