@@ -66,6 +66,8 @@ already knows, so a human reads the diff (gate ②) before anything is pushed.
 │   ├── pr-comment-aware-review/ # dedup new findings against prior PR comments
 │   ├── review-suppressions/    # audit the dedup decisions
 │   └── youtube-download/       # yt-dlp wrapper
+├── agents/                # quick-task — fast agent for small, isolated tasks
+├── commands/              # quick-commit — stage, commit & push helper
 ├── link-claude-memory.sh  # cross-Mac memory sync engine (keyed by git remote)
 ├── build-repo-map.sh      #    repo → shared memory-bucket mapping
 ├── MEMORY-SYNC.md         #    how the memory model works
