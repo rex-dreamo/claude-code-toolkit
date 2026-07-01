@@ -9,7 +9,7 @@
 #
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
-SUITES="prompt-check-test.sh post-gate-test.sh"
+SUITES="prompt-check-test.sh post-gate-test.sh secret-guard-test.sh"
 
 fails=""
 for t in $SUITES; do

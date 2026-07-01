@@ -51,6 +51,12 @@ assert_block "Google API key"         f.txt 'g=AIzaSyA1234567890abcdefghijklmnop
 assert_block "Slack token"            f.txt 'slack=xoxb-1234567890-abcdefABCDEF'
 assert_block "private key header"     f.pem2 '-----BEGIN OPENSSH PRIVATE KEY-----'
 assert_block "hardcoded password"     f.txt 'password = hunter2hunter2hunter2'
+assert_block "Bearer token (auth header)" f.txt 'Authorization: Bearer 0123456789abcdef0123456789abcdef'
+assert_block "npm _authToken"         f.txt '_authToken=abc123def456ghi789jklmno'
+assert_block "AWS STS temp key"       f.txt 'aws_key = ASIA1234567890ABCDEF'
+assert_block "connection string pw"   f.txt 'DATABASE_URL=postgres://admin:SuperSecretPass123@db.prod.internal:5432/app'
+assert_block "bare JWT"               f.txt 'var t="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dGhpc2lzYXNpZ25hdHVyZXN0cmluZw"'
+assert_block "PGP private key block"  f.txt '-----BEGIN PGP PRIVATE KEY BLOCK-----'
 
 echo "── benign / placeholder content (should ALLOW) ──"
 assert_allow "env placeholder"        f.txt 'BRAVE_API_KEY=${BRAVE_API_KEY}'
@@ -58,19 +64,36 @@ assert_allow "YOUR_ template"         f.txt 'export BRAVE_API_KEY=YOUR_BRAVE_KEY
 assert_allow "angle placeholder"      f.txt 'spreadsheet_id: <IAP_HUB_SHEET_ID>'
 assert_allow "ordinary prose"         f.md  'This skill deploys a script into a NAS container.'
 assert_allow "shell var ref"          f.sh  'echo "token=$GITHUB_TOKEN"'
+assert_allow "Bearer env placeholder" f.txt 'Authorization: Bearer ${AI_GAME_DEV_TOKEN}'
 
-echo "── blocklist.local (org literals) ──"
-# With a blocklist present, an org literal must BLOCK; without it, the same line is fine.
+echo "── blocklist.local (org literals) — WARN only at commit, HARD gate at publish ──"
+# Org literals legitimately live in this private repo's docs (CLAUDE.md documents
+# the NAS host), so a commit only WARNS (allows). The hard "never publish" gate is
+# scan-tree.sh, tested in the next block.
 cat > "$G/githooks/blocklist.local" <<'EOF'
 # test blocklist
 secret-host\.example-ddns\.org
 my-cloud-project-[0-9]+
 EOF
-assert_block "blocklist host literal" f.md 'HostName secret-host.example-ddns.org'
-assert_block "blocklist project regex" f.md 'project = my-cloud-project-1234'
-assert_allow "blocklist miss is fine" f.md 'HostName some-other-public-host.org'
+assert_allow "org literal WARNS but does not block commit" f.md 'HostName secret-host.example-ddns.org'
+assert_allow "org project regex does not block commit"     f.md 'project = my-cloud-project-1234'
+assert_block "real credential still BLOCKS (blocklist present)" f.md 'aws_key = AKIA1234567890ABCDEF'
+assert_allow "blocklist miss is fine"                      f.md 'HostName some-other-public-host.org'
 rm -f "$G/githooks/blocklist.local"
 assert_allow "no blocklist => org line ok" f.md 'HostName secret-host.example-ddns.org'
+
+echo "── scan-tree.sh: org denylist is the HARD gate on the export path ──"
+STREE="$REPO/githooks/scan-tree.sh"
+TDIR="$SANDBOX/tree"; DENY="$SANDBOX/deny.txt"
+printf 'secret-host\\.example-ddns\\.org\n' > "$DENY"
+mkdir -p "$TDIR"; printf 'HostName secret-host.example-ddns.org\n' > "$TDIR/doc.md"
+bash "$STREE" "$TDIR" "$DENY" >/dev/null 2>&1 \
+  && bad "scan-tree should BLOCK an org literal in the export tree" \
+  || ok "scan-tree BLOCKS org literal (export hard gate)"
+printf 'nothing sensitive here\n' > "$TDIR/doc.md"
+bash "$STREE" "$TDIR" "$DENY" >/dev/null 2>&1 \
+  && ok "scan-tree passes a clean tree" || bad "scan-tree false-positive on clean tree"
+rm -rf "$TDIR"
 
 echo "── path exclusion (guard's own test corpus) ──"
 mkdir -p "$G/tests/githooks"
@@ -80,6 +103,17 @@ git -C "$G" add tests/githooks/fixture.sh >/dev/null 2>&1
   && ok "tests/githooks/ fixtures are not scanned" || bad "tests/githooks/ should be excluded"
 git -C "$G" reset -q >/dev/null 2>&1
 rm -rf "$G/tests"
+
+echo "── rename+modify must still be scanned (diff-filter ACMR) ──"
+printf 'line one\nline two\nline three\nline four\n' > "$G/rn_src.txt"
+git -C "$G" add rn_src.txt >/dev/null 2>&1
+git -C "$G" commit -q -m base >/dev/null 2>&1
+git -C "$G" mv rn_src.txt rn_dst.txt >/dev/null 2>&1
+printf 'aws_key = AKIA1234567890ABCDEF\n' >> "$G/rn_dst.txt"
+git -C "$G" add rn_dst.txt >/dev/null 2>&1
+( cd "$G" && bash githooks/pre-commit >/dev/null 2>&1 ) \
+  && bad "rename+modify bypass — secret slipped through" || ok "rename+modify is scanned (ACMR)"
+git -C "$G" reset -q --hard HEAD >/dev/null 2>&1
 
 echo "── bypass ──"
 printf '%s\n' 'AKIAIOSFODNN7EXAMPLE9' > "$G/by.txt"

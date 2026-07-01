@@ -22,9 +22,12 @@ HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
 
 found=0
 
-# The guard's own test corpus deliberately contains fake credential fixtures —
-# exempt it (same rationale as githooks/pre-commit's EXCLUDE_RE).
-EXCLUDE_RE='/tests/githooks/'
+# The guards' own test corpora deliberately contain fake credential fixtures and
+# secret-store PATHS (tests/hooks/ drives the secret-path guards; tests/githooks/
+# drives the commit scanner) — exempt both, same rationale as pre-commit's
+# EXCLUDE_RE. Narrow on purpose: anything excluded here is a scan blind spot, and
+# pre-commit's CRED_RE still scans tests/hooks/ so real credentials can't hide.
+EXCLUDE_RE='/tests/(hooks|githooks)/'
 
 # 1) Credential-shaped content (drop placeholder/example lines + excluded paths).
 cred="$(grep -rIEn -e "$CRED_RE" "$DIR" 2>/dev/null | grep -viE -e "$ALLOW_RE" | grep -vE -e "$EXCLUDE_RE" || true)"

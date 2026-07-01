@@ -3,14 +3,18 @@
 # pre-commit — secret & org-context guard for the claude-config repo.
 #
 # Scans the *staged additions* of each commit (not the whole tree, not unchanged
-# lines) for two classes of leak and aborts the commit if it finds either:
+# lines) for two classes of leak: it ABORTS on credential-shaped content, and
+# only WARNS (non-blocking) on org-sensitive literals:
 #
 #   1. Credential-shaped content — private keys, cloud/API tokens, hardcoded
-#      secret assignments. Always on; needs no configuration.
-#   2. Org-specific literals you never want published — your NAS host, GCP
-#      project IDs, service-account emails, corporate email domain, etc. These
-#      are read from githooks/blocklist.local (git-ignored, never committed), so
-#      the guard knows the sensitive strings WITHOUT the repo itself storing them.
+#      secret assignments. Always on; needs no configuration. BLOCKS the commit.
+#   2. Org-specific literals you never want PUBLISHED — your NAS host, GCP
+#      project IDs, corporate email domain, etc. — read from githooks/
+#      blocklist.local (git-ignored). These legitimately live in this PRIVATE
+#      repo's own docs (e.g. CLAUDE.md documents the NAS endpoint), so at commit
+#      time they only WARN. The HARD gate for org literals is the public-export
+#      path (publish.sh -> scan-tree.sh), which refuses to ship any denylisted
+#      line — that is where "never publish" is actually enforced.
 #
 # Why added-lines-only: a guard that re-flagged pre-existing lines would block
 # every commit that merely touches an already-tracked file. We parse `git diff
@@ -66,20 +70,23 @@ while IFS= read -r l; do
       lineno=$((lineno + 1))
       ;;
   esac
-done < <(git diff --cached --no-color -U0 --diff-filter=ACM) > "$ROWS"
+done < <(git diff --cached --no-color -U0 --diff-filter=ACMR) > "$ROWS"
 
 found=0
 
-# 2) Org blocklist — matched unconditionally (placeholder allowlist does NOT excuse).
+# 2) Org blocklist — WARN only (non-blocking). Org literals legitimately appear
+#    in this PRIVATE repo's own docs (CLAUDE.md documents the NAS endpoint, etc.).
+#    The hard "never publish" gate is publish.sh -> scan-tree.sh over the exported
+#    subset. Here we only surface a heads-up when a commit spreads an org literal.
 if [ -f "$BLOCKLIST" ]; then
   BLPAT="$(mktemp)"
   grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$BLOCKLIST" > "$BLPAT" 2>/dev/null || true
   if [ -s "$BLPAT" ]; then
     bl="$(grep -iE -f "$BLPAT" "$ROWS" 2>/dev/null || true)"
     if [ -n "$bl" ]; then
-      printf '\033[31m✖ pre-commit: staged change matches githooks/blocklist.local (org-sensitive literal)\033[0m\n' >&2
+      printf '\033[33m⚠ pre-commit: staged change adds an org-sensitive literal (githooks/blocklist.local)\033[0m\n' >&2
       printf '%s\n' "$bl" | cut -c1-160 | sed 's/^/  /' >&2
-      found=1
+      printf '  allowed in this private repo — but publish.sh/scan-tree.sh will refuse to EXPORT it.\n' >&2
     fi
   fi
 fi
@@ -93,9 +100,8 @@ if [ -n "$cr" ]; then
 fi
 
 if [ "$found" = 1 ]; then
-  printf '\nRemove it, or — if this is a verified false positive — re-run with\n' >&2
+  printf '\nRemove the credential, or — if this is a verified false positive — re-run with\n' >&2
   printf '  SKIP_SECRET_SCAN=1 git commit ...   (or git commit --no-verify)\n' >&2
-  printf 'To teach the guard a new org literal, add a regex to githooks/blocklist.local\n' >&2
   exit 1
 fi
 exit 0
